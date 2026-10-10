@@ -1,4 +1,5 @@
 import { alertUpdates, initialAlerts, initialDecisions, initialNotifications, networkAgents, networkEdges, units, volatilityByRange } from './mockData.js'
+import { apiGet } from './api.js'
 
 // Async data boundary for the prototype. Replace these mock implementations
 // with fetch calls while keeping the view components and response shapes intact.
@@ -28,6 +29,42 @@ function updateChartSeries() {
 }
 
 export async function fetchCommandCenterData() {
+  try {
+    const [snapshot, decisions, hitl] = await Promise.all([
+      apiGet('/api/status'),
+      apiGet('/api/decisions?limit=50'),
+      apiGet('/api/hitl/pending'),
+    ])
+    const ports = snapshot.ports || []
+    const skus = snapshot.skus || []
+    const activeThreats = ports.filter((port) => port.status !== 'operational').length + hitl.length
+    const criticalThreats = ports.filter((port) => port.status === 'disrupted').length
+    const highRiskSkus = skus.filter((sku) => sku.current_inventory <= sku.reorder_point).length
+    const health = Math.max(0, 100 - (activeThreats * 8) - (highRiskSkus * 5))
+    return simulateNetworkLatency({
+      summary: {
+        activeThreats: String(activeThreats).padStart(2, '0'),
+        criticalThreats,
+        stockoutForecast: { '3D': String(highRiskSkus).padStart(2, '0'), '7D': String(highRiskSkus).padStart(2, '0'), '14D': String(Math.min(skus.length, highRiskSkus + 1)).padStart(2, '0') },
+        costVariance: '—',
+        savings: `$${Math.round((decisions.data || []).reduce((sum, item) => sum + Number(item.cost_estimate || 0), 0) / 1000)}K`,
+        networkHealth: health.toFixed(1),
+        healthChange: `${health >= 80 ? '+' : '−'}${Math.abs(health - 80).toFixed(1)}%`,
+        systemStatus: activeThreats > 3 ? 'ELEVATED MONITORING' : 'SYSTEMS NOMINAL',
+        lastUpdated: new Date().toISOString(),
+      },
+      chartMetrics: { networkHealth: health.toFixed(1), healthChange: `${health >= 80 ? '+' : '−'}${Math.abs(health - 80).toFixed(1)}%`, marketVolatility: '—', volatilityChange: '—' },
+      alerts: ports.filter((port) => port.status !== 'operational').map((port, index) => ({
+        id: port.id || index, type: port.status === 'disrupted' ? 'critical' : 'warning', source: 'PORT STATUS',
+        title: `${port.name} is ${port.status}`, detail: 'The backend world model reported a non-operational port status.',
+        location: port.country || 'Global', time: 'Just now', action: 'Agent network monitoring',
+      })),
+      alertUpdates,
+      volatilityByRange: updateChartSeries(),
+    })
+  } catch {
+    // Keep the existing local dataset available when the backend is offline.
+  }
   refreshTick += 1
   const tick = refreshTick
   const health = vary(87.6, 2, 78, 97, tick)
@@ -66,6 +103,29 @@ export async function fetchAgentNetworkData() {
 }
 
 export async function fetchGlobalUnits() {
+  try {
+    const snapshot = await apiGet('/api/status')
+    const ports = snapshot.ports || []
+    if (ports.length) return ports.map((port, index) => ({
+      id: port.id,
+      name: port.name,
+      short: port.name,
+      type: 'Port',
+      region: port.country || 'Global',
+      city: port.country || 'Global',
+      coordinates: [[25.2048, 55.2708], [1.2903, 103.8519], [33.7405, -118.2775], [19.076, 72.8777]][index % 4],
+      status: port.status === 'disrupted' ? 'At risk' : port.status === 'congested' ? 'Watch' : 'Operational',
+      shipments: 0,
+      capacity: port.status === 'operational' ? 70 : 90,
+      inventory: '—',
+      risk: port.status === 'operational' ? 'Low' : 'Elevated',
+      manager: 'Network Operations',
+      lastUpdate: 'Just now',
+      alerts: port.status === 'operational' ? 0 : 1,
+    }))
+  } catch {
+    // Keep the existing local dataset available when the backend is offline.
+  }
   refreshTick += 1
   liveUnits = liveUnits.map((unit, index) => {
     const capacity = vary(unit.capacity, 2, 45, 99, refreshTick, index)
@@ -77,7 +137,28 @@ export async function fetchGlobalUnits() {
 }
 
 export async function fetchDecisionLogs() {
-  return simulateNetworkLatency(initialDecisions)
+  try {
+    const result = await apiGet('/api/decisions?limit=50')
+    return result.data.map((decision) => ({
+      id: decision.id,
+      title: decision.decision || `${decision.agent} ${decision.event_type}`,
+      severity: Number(decision.cost_estimate || 0) > 10000 ? 'High' : 'Medium',
+      status: decision.autonomy_level === 'hitl_required' ? 'Pending approval' : decision.autonomy_level === 'hitl_approved' ? 'Approved' : 'Executed',
+      confidence: 80,
+      created: new Date(decision.timestamp).toLocaleString(),
+      category: decision.agent,
+      trigger: decision.input_summary || 'Agent decision recorded by the backend.',
+      triggerSource: `${decision.agent} · ${decision.event_type}`,
+      agents: [{ name: decision.agent, role: decision.event_type, contribution: decision.decision || 'Decision recorded.', data: 'Backend decision log' }],
+      recommendation: decision.decision || 'No recommendation details recorded.',
+      approvedBy: decision.autonomy_level === 'hitl_approved' ? 'Workspace administrator' : null,
+      approvalTime: null,
+      outcome: [{ label: 'Estimated cost', value: `$${Number(decision.cost_estimate || 0).toLocaleString()}`, trend: 'caution' }],
+      timeline: [{ time: new Date(decision.timestamp).toLocaleString(), title: 'Decision recorded', detail: decision.predicted_outcome || 'Backend event processed.', actor: decision.agent, type: 'agent' }],
+    }))
+  } catch {
+    return simulateNetworkLatency(initialDecisions)
+  }
 }
 
 export async function fetchSystemNotifications() {

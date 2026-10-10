@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 const pool = require('../db/client');
 const { broadcast } = require('../lib/broadcast');
 
@@ -20,12 +21,12 @@ router.get('/pending', auth, async (req, res) => {
 });
 
 // POST approve
-router.post('/:id/approve', auth, async (req, res) => {
+router.post('/:id/approve', auth, requireRole('administrator'), async (req, res) => {
   try {
     const { id } = req.params;
     const resolvedBy = req.user?.sub || req.user?.id || 'frontend_user';
     await pool.query(
-      `UPDATE hitl_cards SET status = 'approved', resolved_at = NOW(), resolved_by = $1 WHERE id = $2`,
+      `UPDATE hitl_cards SET status = 'approved', resolved_at = NOW(), resolved_by = $1 WHERE id = $2 AND status = 'pending'`,
       [resolvedBy, id]
     );
     await pool.query(
@@ -40,12 +41,12 @@ router.post('/:id/approve', auth, async (req, res) => {
 });
 
 // POST reject
-router.post('/:id/reject', auth, async (req, res) => {
+router.post('/:id/reject', auth, requireRole('administrator'), async (req, res) => {
   try {
     const { id } = req.params;
     const resolvedBy = req.user?.sub || req.user?.id || 'frontend_user';
     await pool.query(
-      `UPDATE hitl_cards SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE id = $2`,
+      `UPDATE hitl_cards SET status = 'rejected', resolved_at = NOW(), resolved_by = $1 WHERE id = $2 AND status = 'pending'`,
       [resolvedBy, id]
     );
     await pool.query(

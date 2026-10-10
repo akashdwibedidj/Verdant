@@ -1,6 +1,26 @@
 -- Supply Chain AI Agent Schema
 -- PostgreSQL 18 compatible, no pgvector required
 
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  workspace TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'operator' CHECK (role IN ('operator', 'administrator')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_invalid_before TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Seed demo users (password: password123)
+INSERT INTO users (email, name, workspace, password_hash, role)
+VALUES 
+  ('demo@verdant.ai', 'Alex Morgan', 'Verdant Global', '$2b$12$UVtOjwe/S50e1kS0hDx69.jcCtJoCHXXS6J3T1orPF631JysN9v3i', 'administrator'),
+  ('admin@verdant.ai', 'Operations Admin', 'Verdant Global', '$2b$12$UVtOjwe/S50e1kS0hDx69.jcCtJoCHXXS6J3T1orPF631JysN9v3i', 'administrator')
+ON CONFLICT (email) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS suppliers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,

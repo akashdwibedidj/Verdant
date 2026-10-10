@@ -1,0 +1,21 @@
+Three design rules matter more than your choice of framework:
+
+One shared world model. Every agent reads and writes the same graph (suppliers, ports, routes, SKUs, inventory, lead times) plus a decision log. They pass typed messages (Pydantic schemas for Event, Forecast, Plan, Action) instead of free-form chat, which keeps a multi-agent system debuggable.
+The LLM proposes, something deterministic verifies. The planner suggests mitigations, an optimizer or simulator checks cost, capacity and lead time, and compliance rules are code, not prompts.
+Autonomy is a dial. Each action type is set to suggest only, act with approval, or act alone within limits (budget, approved suppliers), and everything is written to an audit log.
+
+At production scale you’d run many such crews (per region or trade lane) under a supervisor, all sharing the same loop. For 20 hours, build one crew and run it on an accelerated replay clock, so “real-time” is visible in three minutes while the same loop could run on live feeds.
+
+What “self-evolving” should concretely mean
+
+This is where teams get vague and judges get skeptical. Use mechanisms you can test:
+
+Memory. Every decision is logged with predicted versus actual outcome, and agents write short lessons to a retrievable store they consult next time.
+Champion/challenger. An evaluator replays past disruptions, and a mutator proposes changes (prompts, alert thresholds, signal weights, which agents get consulted). The challenger replaces the current version only if it wins the replay. Everything is versioned, with rollback.
+Growth. Agents can propose new features or tools (say, port dwell time), admitted only after passing sandbox tests. You can also spawn a specialist for a recurring situation and weight agents’ votes by track record.
+
+Prove it with one chart: forecast error or decision cost falling across successive disruption replays.
+
+Predicting market shifts
+
+Combine three things: forecasts with uncertainty (price, demand, lead time; a statistical baseline plus gradient boosting or a time-series foundation model), change-point detection that flags when the regime itself has moved, and LLM event reasoning that turns “strike at port X” into “+N days on these nodes”. Backtest on a well-known shock such as the 2021 Suez Canal blockage so you have ground truth. Report only what you measure: alert lead time, forecast error, false-alarm rate.

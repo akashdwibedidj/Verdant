@@ -23,11 +23,11 @@ export default function AuthPage({ onAuthenticated }) {
     setSubmitting(true)
     try {
       const sessionUser = isSignup
-        ? await demoSignUp({ name, workspace, email })
+        ? await demoSignUp({ name, workspace, email, password })
         : await demoLogin({ email, password })
       onAuthenticated(sessionUser)
-    } catch {
-      setError('We could not start your demo session. Please try again.')
+    } catch (err) {
+      setError(err?.message || 'We could not start your demo session. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -51,7 +51,13 @@ export default function AuthPage({ onAuthenticated }) {
         {!isSignup && <div className="auth-form-options"><label><input type="checkbox" />Remember this device</label><button type="button" onClick={() => setError('Password recovery will be available when authentication is connected.')}>Forgot password?</button></div>}
         <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? <><span className="auth-submit-spinner" />{isSignup ? 'Creating workspace…' : 'Signing in…'}</> : <>{isSignup ? 'Create account' : 'Sign in'} <FiArrowRight /></>}</button>
       </form>
-      <div className="auth-demo-note"><FiShield /><p><strong>Prototype access</strong><span>This frontend uses a local demo session. Connect an authentication provider before production use.</span></p></div>
+      <div className="auth-demo-note" onClick={() => { if (!isSignup) { setEmail('demo@verdant.ai'); setPassword('password123'); } }} style={{ cursor: isSignup ? 'default' : 'pointer' }} title={isSignup ? '' : 'Click to autofill demo credentials'}>
+        <FiShield />
+        <p>
+          <strong>Demo credentials: demo@verdant.ai / password123</strong>
+          <span>{isSignup ? 'Your session is issued by the connected backend.' : 'Click to autofill demo administrator credentials.'}</span>
+        </p>
+      </div>
       <div className="auth-form-footer"><span>Secure workspace access</span><span>Privacy · Terms</span></div>
     </div></section>
   </main>

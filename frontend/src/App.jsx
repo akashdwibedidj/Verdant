@@ -13,6 +13,7 @@ import DecisionLogs from './DecisionLogs.jsx'
 import SettingsPage from './SettingsPage.jsx'
 import AuthPage from './AuthPage.jsx'
 import LoadingState from './components/LoadingState.jsx'
+import { apiGet, apiPost, connectLiveStream } from './data/api.js'
 import { fetchAgentNetworkData, fetchCommandCenterData, fetchSystemNotifications } from './data/mockApi.js'
 import { agents, shipments, signals } from './data/mockData.js'
 
@@ -36,7 +37,7 @@ function Sidebar({ active, setActive, open, close, user }) {
       </div>
       <div className="workspace-switch">
         <div className="workspace-avatar">N</div>
-        <div className="workspace-copy"><strong>Northstar Group</strong><span>Enterprise workspace</span></div>
+        <div className="workspace-copy"><strong>{user.workspace}</strong><span>Enterprise workspace</span></div>
         <FiChevronDown className="workspace-chevron" size={15} />
       </div>
       <div className="nav-caption">WORKSPACE</div>
@@ -239,6 +240,8 @@ function CommandCenter({ user }) {
   const [data, setData] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [stockoutRange, setStockoutRange] = useState('7D')
+  const [replayState, setReplayState] = useState('idle')
+  const [liveEventCount, setLiveEventCount] = useState(0)
   useEffect(() => {
     let mounted = true
     let loaded = false
@@ -247,6 +250,26 @@ function CommandCenter({ user }) {
     const timer = window.setInterval(refresh, 15000)
     return () => { mounted = false; window.clearInterval(timer) }
   }, [])
+  useEffect(() => connectLiveStream((event) => {
+    if (event.type !== 'connected') setLiveEventCount((count) => count + 1)
+  }, (status) => {
+    if (status === 'disconnected' && replayState === 'running') setReplayState('idle')
+  }), [replayState])
+  async function toggleReplay() {
+    if (replayState === 'running') {
+      await apiPost('/api/replay/stop', {})
+      setReplayState('idle')
+      return
+    }
+    setReplayState('starting')
+    try {
+      await apiPost('/api/replay/start', {})
+      setReplayState('running')
+    } catch {
+      setReplayState('idle')
+      setLoadError(true)
+    }
+  }
   if (!data && !loadError) return <div className="page-content command-center-content"><LoadingState title="Loading command center" detail="Fetching threat, inventory, cost, and network data." /></div>
   if (loadError) return <div className="page-content command-center-content"><LoadingState title="Command center data unavailable" detail="The data source could not be reached. Reload the view to try again." /></div>
   const { summary } = data
@@ -256,7 +279,7 @@ function CommandCenter({ user }) {
   const greeting = currentDate.getHours() < 12 ? 'Good morning' : currentDate.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const stockoutDescription = { '3D': '3-day forecast window', '7D': '7-day forecast window', '14D': '14-day forecast window' }
   return <div className="page-content command-center-content">
-    <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot" /> {summary.systemStatus} <span className="eyebrow-divider">·</span> {dateLabel}</div><h1>{greeting}, {user?.name || 'there'} <span>✳</span></h1><p>Your supply network is being monitored in real time.</p></div><button className="date-button"><FiClock size={15} /> Today, {dateButtonLabel} <FiChevronDown size={14} /></button></div>
+    <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot" /> {summary.systemStatus} <span className="eyebrow-divider">·</span> {dateLabel}</div><h1>{greeting}, {user?.name || 'there'} <span>✳</span></h1><p>Your supply network is being monitored in real time.</p></div><div><button className="date-button" onClick={toggleReplay}>{replayState === 'running' ? 'Stop AI replay' : replayState === 'starting' ? 'Starting replay…' : 'Run AI replay'} <FiZap size={15} /></button><small>{liveEventCount ? `${liveEventCount} live agent events received` : `Today, ${dateButtonLabel}`}</small></div></div>
     <section className="cc-summary-grid" aria-label="Command center summary">
       <SummaryCard icon={HiOutlineExclamationTriangle} label="Active supply chain threats" value={summary.activeThreats} note={<><b className="cc-note-warn">{summary.criticalThreats} critical</b> need attention</>} tone="rose" />
       <SummaryCard icon={HiOutlineCube} label="Predicted stockouts" value={summary.stockoutForecast[stockoutRange]} unit=" SKUs" note={stockoutDescription[stockoutRange]} tone="amber"><StockoutRange value={stockoutRange} onChange={setStockoutRange} /></SummaryCard>
@@ -306,13 +329,31 @@ function App() {
   const [sessionUser, setSessionUser] = useState(() => {
     try { return JSON.parse(window.localStorage.getItem('verdant-session') || 'null') } catch { return null }
   })
+  const [sessionChecked, setSessionChecked] = useState(false)
+  useEffect(() => {
+    let mounted = true
+    if (!sessionUser) {
+      setSessionChecked(true)
+      return () => { mounted = false }
+    }
+    apiGet('/api/auth/me')
+      .then(({ user }) => { if (mounted) { setSessionUser(user); setSessionChecked(true) } })
+      .catch(() => { if (mounted) { window.localStorage.removeItem('verdant-session'); setSessionUser(null); setSessionChecked(true) } })
+    return () => { mounted = false }
+  }, [])
   const [theme, setTheme] = useState(() => window.localStorage.getItem('verdant-theme') || 'light')
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     window.localStorage.setItem('verdant-theme', theme)
   }, [theme])
   const authenticate = (user) => { window.localStorage.setItem('verdant-session', JSON.stringify(user)); setSessionUser(user) }
-  const logout = () => { window.localStorage.removeItem('verdant-session'); setSessionUser(null) }
+  const logout = async () => {
+    try { await apiPost('/api/auth/logout', {}) } finally {
+      window.localStorage.removeItem('verdant-session')
+      setSessionUser(null)
+    }
+  }
+  if (!sessionChecked) return <LoadingState title="Checking secure session" detail="Verifying your workspace access." />
   if (!sessionUser) return <AuthPage onAuthenticated={authenticate} />
   return <div className="app-shell">
     <Sidebar active={active} setActive={setActive} open={sidebarOpen} close={() => setSidebarOpen(false)} user={sessionUser} />
