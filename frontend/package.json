@@ -1,0 +1,26 @@
+{
+  "name": "supplychain-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "leaflet": "^1.9.4",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-icons": "^5.5.0",
+    "react-leaflet": "^5.0.0",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

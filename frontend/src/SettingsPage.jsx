@@ -1,0 +1,9 @@
+import { FiCheck, FiMoon, FiSun } from 'react-icons/fi'
+
+export default function SettingsPage({ theme, onThemeChange }) {
+  const dark = theme === 'dark'
+  return <div className="page-content settings-page">
+    <div className="welcome-row"><div><div className="eyebrow">WORKSPACE PREFERENCES</div><h1>Settings <span>✳</span></h1><p>Customize how Verdant Intelligence looks and works for you.</p></div></div>
+    <section className="settings-layout"><aside className="panel settings-nav"><span>SETTINGS</span><button className="selected" aria-current="page">Appearance</button></aside><div className="panel settings-content"><div className="settings-section-heading"><div><span className="settings-section-icon"><FiSun /></span><div><h2>Appearance</h2><p>Choose a theme for your command center.</p></div></div></div><div className="settings-option"><div className="settings-option-icon"><FiMoon /></div><div className="settings-option-copy"><strong>Dark mode</strong><span>Use a darker palette across the workspace to reduce glare.</span></div><button className={`theme-switch ${dark ? 'enabled' : ''}`} role="switch" aria-checked={dark} aria-label="Enable dark mode" onClick={() => onThemeChange(dark ? 'light' : 'dark')}><span>{dark && <FiCheck />}</span></button></div><div className="theme-previews"><button className={`theme-preview light ${!dark ? 'chosen' : ''}`} onClick={() => onThemeChange('light')}><span className="preview-window"><i /><i /><i /><b /></span><strong>Light</strong></button><button className={`theme-preview dark ${dark ? 'chosen' : ''}`} onClick={() => onThemeChange('dark')}><span className="preview-window"><i /><i /><i /><b /></span><strong>Dark</strong></button></div><div className="settings-save-note"><FiCheck />Your appearance preference is saved on this device.</div></div></section>
+  </div>
+}
